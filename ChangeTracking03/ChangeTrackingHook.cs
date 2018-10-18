@@ -14,6 +14,7 @@ using Microsoft.Azure.Documents.Client;
 using Microsoft.Azure.Documents;
 using System.Data.SqlClient;
 using System.Data;
+using System.Net.Http.Headers;
 
 namespace ChangeTracking03
 {
@@ -42,7 +43,8 @@ namespace ChangeTracking03
 
 
             // Read Application configuration from database
-            string sqlConnectionString = (await kvClient.GetSecretAsync(keyVaultUrl, Environment.GetEnvironmentVariable("SQLMGT_CONNECTION_STRING"))).Value;
+//            string sqlConnectionString = (await kvClient.GetSecretAsync(keyVaultUrl, Environment.GetEnvironmentVariable("SQLMGT_CONNECTION_STRING"))).Value;
+            string sqlConnectionString = (await kvClient.GetSecretAsync(keyVaultUrl, Environment.GetEnvironmentVariable("LOCALSQL_CONNECTION_STRING"))).Value;
             log.LogInformation($"SQL connection string. [{sqlConnectionString}]");
             string appChangeWebHookURL = "No appChangeWebHookURL";
             using (SqlConnection connection = new SqlConnection(sqlConnectionString))
