@@ -69,17 +69,47 @@ namespace ChangeTracking03
 
                 connection.Close();
             }
-            
+
             string dbConnectionString = (await kvClient.GetSecretAsync(keyVaultUrl, Environment.GetEnvironmentVariable("DB_CONNECTION_STRING"))).Value;
             string dbAccessKey = (await kvClient.GetSecretAsync(keyVaultUrl, Environment.GetEnvironmentVariable("DB_ACCESS_KEY"))).Value;
             log.LogInformation($"DB connection string. [{dbConnectionString}]");
 
+            //////////////
+            // CosmosDB
+            //////////////
             var client = new DocumentClient(new Uri(dbConnectionString), dbAccessKey);
             Document doc = await client.UpsertDocumentAsync(UriFactory.CreateDocumentCollectionUri("ActivityLogDb", "AppChangeTracking"), 
                 new { Date = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ssK"), StartedBy = $"{data?.StartedBy}", TargetCloud = $"{data?.TargetCloud}",
                     DeploymentKey = $"{data?.DeploymentKey}", Reason = $"{data?.Reason}", Status = $"{data?.Status}",
                     appChangeWebHookURL = $"{appChangeWebHookURL}", sqlConn=$"{sqlConnectionString}" });
+            //////////////
+            //////////////
 
+            //////////////
+            // SQL
+            //////////////
+            string sqlMgmtConnectionString = (await kvClient.GetSecretAsync(keyVaultUrl, Environment.GetEnvironmentVariable("SQLMGT_CONNECTION_STRING"))).Value;
+            using (SqlConnection connection = new SqlConnection(sqlMgmtConnectionString))
+            {
+                SqlCommand cmd = new SqlCommand("INSERT INTO GoCloudChanges VALUES (@ChangeID, @ChangeTargetType, @TargetCloud, @Summary, @Description, @State, @Status, @StatusReason, @RiskLevel, @OutageMinutes, @ProjectID, @Class, @AuthorUpn, @ApproverUpn)");
+                cmd.Parameters.AddWithValue("@ChangeID", data?.ChangeID);
+                cmd.Parameters.AddWithValue("@ChangeTargetType", data?.ChangeTargetType);
+                cmd.Parameters.AddWithValue("@TargetCloud", data?.TargetCloud);
+                cmd.Parameters.AddWithValue("@Summary", data?.Summary);
+                cmd.Parameters.AddWithValue("@Description", data?.Description);
+                cmd.Parameters.AddWithValue("@State", data?.State);
+                cmd.Parameters.AddWithValue("@StatusReason", data?.StatusReason);
+                cmd.Parameters.AddWithValue("@RiskLevel", data?.RiskLevel);
+                cmd.Parameters.AddWithValue("@OutageMinutes", data?.OutageMinutes);
+                cmd.Parameters.AddWithValue("@ProjectID", data?.ProjectID);
+                cmd.Parameters.AddWithValue("@Class", data?.Class);
+                cmd.Parameters.AddWithValue("@AuthorUpn", data?.AuthorUpn);
+                cmd.Parameters.AddWithValue("@ApproverUpn", data?.ApproverUpn);
+                connection.Open();
+                cmd.ExecuteNonQuery();
+            }
+            //////////////
+            //////////////
             return name != null
                 ? (ActionResult)new OkObjectResult($"Hello, {name} {dbConnectionString} {requestBody}")
                 : new BadRequestObjectResult("Please pass a name on the query string or in the request body");
