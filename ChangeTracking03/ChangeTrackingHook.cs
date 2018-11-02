@@ -43,11 +43,21 @@ namespace ChangeTracking03
     public class ApplicationChangeDbRecord
     {
         public string Date;
-        public string StartedBy;
+        public string ChangeID;
+        public string ChangeTargetType;
         public string TargetCloud;
-        public string DeploymentKey;
-        public string Reason;
+        public string Summary;
+        public string Description;
+        public string State;
         public string Status;
+        public string StatusReason;
+        public string RiskLevel;
+        public int OutageMinutes;
+        public string ProjectID;
+        public string Class;
+        public string AuthorUpn;
+        public string ApproverUpn;
+        public string DeploymentKey;
     }
 
 
@@ -108,22 +118,6 @@ namespace ChangeTracking03
                 connection.Close();
             }
 
-            string sqlMgtConnectionString = (await kvClient.GetSecretAsync(keyVaultUrl, Environment.GetEnvironmentVariable("SQLMGT_CONNECTION_STRING"))).Value;
-            string cmdString = "INSERT INTO [dbo].[GoCloudChanges],[ChangeID],[ChangeTargetType],[TargetCloud],[Summary],[Description],[State],[Status],[StatusReason],[EnvironmentRecordId],[RiskLevel],[OutageMinutes],[ProjectID],[Class],[AuthorUpn],[ApproverUpn] VALUES(@val1, @va2, @val3)";
-            using (SqlConnection conn = new SqlConnection(sqlMgtConnectionString))
-            {
-                using (SqlCommand comm = new SqlCommand())
-                {
-                    comm.Connection = conn;
-                    comm.CommandText = cmdString;
-                    comm.Parameters.AddWithValue("@val1", txtbox1.Text);
-                    comm.Parameters.AddWithValue("@val2", txtbox2.Text);
-                    comm.Parameters.AddWithValue("@val3", txtbox3.Text);
-                    conn.Open();
-                    comm.ExecuteNonQuery();
-                }
-            }
-
             string dbConnectionString = (await kvClient.GetSecretAsync(keyVaultUrl, Environment.GetEnvironmentVariable("DB_CONNECTION_STRING"))).Value;
             string dbAccessKey = (await kvClient.GetSecretAsync(keyVaultUrl, Environment.GetEnvironmentVariable("DB_ACCESS_KEY"))).Value;
             log.LogInformation($"DB connection string. [{dbConnectionString}]");
@@ -149,7 +143,15 @@ namespace ChangeTracking03
                 if (dbRecordFieldInfo != null)
                 {
                     log.LogInformation($"Setting: {propertyName}");
-                    dbRecordFieldInfo.SetValue(dbChangeRecord, fact.value);
+                    if((dbRecordFieldInfo.DeclaringType == typeof(int)) || propertyName.Equals("OutageMinutes"))
+                    {
+                        int x = 0;
+                        Int32.TryParse(fact.value, out x);
+                        dbRecordFieldInfo.SetValue(dbChangeRecord, x);
+                    } else
+                    {
+                        dbRecordFieldInfo.SetValue(dbChangeRecord, fact.value);
+                    }
                 }
             }
 
@@ -179,38 +181,33 @@ namespace ChangeTracking03
             }
 
             //////////////
-            // CosmosDB
-            //////////////
-            Document doc = await client.UpsertDocumentAsync(UriFactory.CreateDocumentCollectionUri("ActivityLogDb", "AppChangeTracking"),
-                trackedChange);
-            //////////////
-            //////////////
-
-            //////////////
             // SQL
             //////////////
             string sqlMgmtConnectionString = (await kvClient.GetSecretAsync(keyVaultUrl, Environment.GetEnvironmentVariable("SQLMGT_CONNECTION_STRING"))).Value;
             using (SqlConnection connection = new SqlConnection(sqlMgmtConnectionString))
             {
-                SqlCommand cmd = new SqlCommand("INSERT INTO GoCloudChanges VALUES (@ChangeID, @ChangeTargetType, @TargetCloud, @Summary, @Description, @State, @Status, @StatusReason, @RiskLevel, @OutageMinutes, @ProjectID, @Class, @AuthorUpn, @ApproverUpn)");
-                cmd.Parameters.AddWithValue("@ChangeID", data?.ChangeID);
-                cmd.Parameters.AddWithValue("@ChangeTargetType", data?.ChangeTargetType);
-                cmd.Parameters.AddWithValue("@TargetCloud", data?.TargetCloud);
-                cmd.Parameters.AddWithValue("@Summary", data?.Summary);
-                cmd.Parameters.AddWithValue("@Description", data?.Description);
-                cmd.Parameters.AddWithValue("@State", data?.State);
-                cmd.Parameters.AddWithValue("@StatusReason", data?.StatusReason);
-                cmd.Parameters.AddWithValue("@RiskLevel", data?.RiskLevel);
-                cmd.Parameters.AddWithValue("@OutageMinutes", data?.OutageMinutes);
-                cmd.Parameters.AddWithValue("@ProjectID", data?.ProjectID);
-                cmd.Parameters.AddWithValue("@Class", data?.Class);
-                cmd.Parameters.AddWithValue("@AuthorUpn", data?.AuthorUpn);
-                cmd.Parameters.AddWithValue("@ApproverUpn", data?.ApproverUpn);
+                SqlCommand cmd = new SqlCommand("INSERT INTO GoCloudChanges" +
+                    " (ChangeID, ChangeTargetType, TargetCloud, Summary, Description, State, Status, StatusReason, RiskLevel, OutageMinutes, ProjectID, Class, AuthorUpn, ApproverUpn, DeploymentKey)" +
+                    " VALUES (@ChangeID, @ChangeTargetType, @TargetCloud, @Summary, @Description, @State, @Status, @StatusReason, @RiskLevel, @OutageMinutes, @ProjectID, @Class, @AuthorUpn, @ApproverUpn, @DeploymentKey)");
+                cmd.Parameters.AddWithValue("@ChangeID", dbChangeRecord.ChangeID);
+                cmd.Parameters.AddWithValue("@ChangeTargetType", dbChangeRecord.ChangeTargetType);
+                cmd.Parameters.AddWithValue("@TargetCloud", dbChangeRecord.TargetCloud);
+                cmd.Parameters.AddWithValue("@Summary", dbChangeRecord.Summary);
+                cmd.Parameters.AddWithValue("@Description", dbChangeRecord.Description);
+                cmd.Parameters.AddWithValue("@State", dbChangeRecord.State);
+                cmd.Parameters.AddWithValue("@Status", dbChangeRecord.Status);
+                cmd.Parameters.AddWithValue("@StatusReason", dbChangeRecord.StatusReason);
+                cmd.Parameters.AddWithValue("@RiskLevel", dbChangeRecord.RiskLevel);
+                cmd.Parameters.AddWithValue("@OutageMinutes", dbChangeRecord.OutageMinutes);
+                cmd.Parameters.AddWithValue("@ProjectID", dbChangeRecord.ProjectID);
+                cmd.Parameters.AddWithValue("@Class", dbChangeRecord.Class);
+                cmd.Parameters.AddWithValue("@AuthorUpn", dbChangeRecord.AuthorUpn);
+                cmd.Parameters.AddWithValue("@ApproverUpn", dbChangeRecord.ApproverUpn);
+                cmd.Parameters.AddWithValue("@DeploymentKey", dbChangeRecord.DeploymentKey);
+                cmd.Connection = connection;
                 connection.Open();
                 cmd.ExecuteNonQuery();
             }
-            //////////////
-            //////////////
 
             return name != null
                 ? (ActionResult)new OkObjectResult($"Hello, {name} {dbConnectionString} {trackedChange} {requestBody}")
