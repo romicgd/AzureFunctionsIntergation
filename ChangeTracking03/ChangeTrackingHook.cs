@@ -123,14 +123,16 @@ namespace ChangeTracking03
             log.LogInformation($"DB connection string. [{dbConnectionString}]");
             var client = new DocumentClient(new Uri(dbConnectionString), dbAccessKey);
 
+
             // Get Change tracking metadata
             var trackedChange = JsonConvert.DeserializeObject<ApplicationChange>(requestBody);
             var dbChangeRecord = new ApplicationChangeDbRecord();
+            DateTime changeDateTime = DateTime.Now;
             Type dbChangeRecordType = dbChangeRecord.GetType();
             var facts = trackedChange.sections[0].facts;
             Fact datefact = new Fact();
             datefact.name = "Date";
-            datefact.value = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ssK");
+            datefact.value = changeDateTime.ToString("yyyy-MM-ddTHH:mm:ssK");
             facts.Add(datefact);
             FieldInfo[] Fields = dbChangeRecordType.GetFields();
 
@@ -187,8 +189,8 @@ namespace ChangeTracking03
             using (SqlConnection connection = new SqlConnection(sqlMgmtConnectionString))
             {
                 SqlCommand cmd = new SqlCommand("INSERT INTO GoCloudChanges" +
-                    " (ChangeID, ChangeTargetType, TargetCloud, Summary, Description, State, Status, StatusReason, RiskLevel, OutageMinutes, ProjectID, Class, AuthorUpn, ApproverUpn, DeploymentKey)" +
-                    " VALUES (@ChangeID, @ChangeTargetType, @TargetCloud, @Summary, @Description, @State, @Status, @StatusReason, @RiskLevel, @OutageMinutes, @ProjectID, @Class, @AuthorUpn, @ApproverUpn, @DeploymentKey)");
+                    " (ChangeID, ChangeTargetType, TargetCloud, Summary, Description, State, Status, StatusReason, RiskLevel, OutageMinutes, ProjectID, Class, AuthorUpn, ApproverUpn, DeploymentKey, recorddate)" +
+                    " VALUES (@ChangeID, @ChangeTargetType, @TargetCloud, @Summary, @Description, @State, @Status, @StatusReason, @RiskLevel, @OutageMinutes, @ProjectID, @Class, @AuthorUpn, @ApproverUpn, @DeploymentKey, @recorddate)");
                 cmd.Parameters.AddWithValue("@ChangeID", dbChangeRecord.ChangeID);
                 cmd.Parameters.AddWithValue("@ChangeTargetType", dbChangeRecord.ChangeTargetType);
                 cmd.Parameters.AddWithValue("@TargetCloud", dbChangeRecord.TargetCloud);
@@ -204,6 +206,7 @@ namespace ChangeTracking03
                 cmd.Parameters.AddWithValue("@AuthorUpn", dbChangeRecord.AuthorUpn);
                 cmd.Parameters.AddWithValue("@ApproverUpn", dbChangeRecord.ApproverUpn);
                 cmd.Parameters.AddWithValue("@DeploymentKey", dbChangeRecord.DeploymentKey);
+                cmd.Parameters.AddWithValue("@recorddate", changeDateTime);
                 cmd.Connection = connection;
                 connection.Open();
                 cmd.ExecuteNonQuery();
